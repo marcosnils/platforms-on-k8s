@@ -1,0 +1,133 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "REST API to provide Agenda features.",
+        "title": "Agenda Service API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "Mauricio Salatino @salaboy",
+            "url": "https://www.salaboy.com",
+            "email": "salaboy@salaboy.com"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "0.0.1"
+    },
+    "host": "localhost:8080",
+    "basePath": "/",
+    "paths": {
+        "/": {
+            "post": {
+                "description": "Creates a new agenda item",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agenda"
+                ],
+                "summary": "Creates a new agenda item",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.AgendaItem"
+                        }
+                    }
+                }
+            }
+        },
+        "/highlights": {
+            "get": {
+                "description": "Get all highlights",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Highlight"
+                ],
+                "summary": "Show highlights",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/main.AgendaItem"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/{ID}": {
+            "get": {
+                "description": "Gets an AgendaItem by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agenda"
+                ],
+                "summary": "Show Agenda Item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "AgendaItem ID",
+                        "name": "ID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.AgendaItem"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.AgendaItem": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "day": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "proposal": {
+                    "$ref": "#/definitions/main.Proposal"
+                },
+                "time": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.Proposal": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

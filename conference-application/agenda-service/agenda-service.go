@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"os"
 
+	httpSwagger "github.com/swaggo/http-swagger/v2"
+
 	"math/rand"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/redis/go-redis/v9"
+	_ "github.com/salaboy/platforms-on-k8s/conference-application/agenda-service/docs"
 	"golang.org/x/exp/slices"
 )
 
@@ -52,16 +55,23 @@ func getAgendaByDayHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// getHighlightsHandler gets highlights from Redis.
+// @Summary Show highlights
+// @Description Get all highlights
+// @Tags Highlight
+// @Accept json
+// @Product json
+// @Router /highlights [get]
+// @Success 200 {array} AgendaItem
 func getHighlightsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
-	agendaItemsHashs, err := rdb.HGetAll(ctx, KEY).Result()
+	agendaItemsHashes, err := rdb.HGetAll(ctx, KEY).Result()
 	if err != nil {
 		panic(err)
 	}
-
 	higlights := 4
 	min := 0
-	max := len(agendaItemsHashs)
+	max := len(agendaItemsHashes)
 
 	var chosenOnes []int
 	counter := 0
@@ -79,12 +89,12 @@ func getHighlightsHandler(w http.ResponseWriter, r *http.Request) {
 
 	counter = 0
 	var agendaItems []AgendaItem
-	for _, ai := range agendaItemsHashs {
+	for _, ai := range agendaItemsHashes {
 		if slices.Contains(chosenOnes, counter) {
 			var agendaItem AgendaItem
 			err = json.Unmarshal([]byte(ai), &agendaItem)
 			if err != nil {
-				log.Printf(("There was an error decoding the AgendaItem into the struct: %v", err)
+				log.Printf("There was an error decoding the AgendaItem into the struct: %v", err)
 			}
 			agendaItems = append(agendaItems, agendaItem)
 		}
@@ -95,6 +105,14 @@ func getHighlightsHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// getAllAgendaItemsHandler gets all agenda item from database.
+// @Summary Show highlights
+// @Description Get all highlights
+// @Tags Highlight
+// @Accept json
+// @Product json
+// @Router /highlights [get]
+// @Success 200 {array} AgendaItem
 func getAllAgendaItemsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	agendaItemsHashs, err := rdb.HGetAll(ctx, KEY).Result()
@@ -116,9 +134,19 @@ func getAllAgendaItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// getAgendaItemByIdHandler gets an agenda item by ID.
+// @Summary Show Agenda Item
+// @Description Gets an AgendaItem by ID
+// @Tags Agenda
+// @Accept json
+// @Produce json
+// @Param ID path string true "AgendaItem ID"
+// @Router /{ID} [get]
+// @Success 200 {object} AgendaItem
 func getAgendaItemByIdHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
-	agendaItemId := mux.Vars(r)["id"]
+
+	agendaItemId := chi.URLParam(r, "id")
 	log.Printf("Fetching Agenda Item By Id: %s", agendaItemId)
 	agendaItemById, err := rdb.HGet(ctx, KEY, agendaItemId).Result()
 	if err != nil {
@@ -133,6 +161,14 @@ func getAgendaItemByIdHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, agendaItem)
 }
 
+// newAgendaItemHandler creates a new agenda item.
+// @Summary Creates a new agenda item
+// @Description Creates a new agenda item
+// @Tags Agenda
+// @Accept json
+// @Produce json
+// @Router / [post]
+// @Success 200 {object} AgendaItem
 func newAgendaItemHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -165,6 +201,17 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(response)
 }
 
+// @title Agenda Service API
+// @version 0.0.1
+// @description REST API to provide Agenda features.
+// @termsOfService	http://swagger.io/terms/
+// @contact.name	Mauricio Salatino @salaboy
+// @contact.url	https://www.salaboy.com
+// @contact.email	salaboy@salaboy.com
+// @license.name	Apache 2.0
+// @license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+// @host		localhost:8080
+// @BasePath	/
 func main() {
 	appPort := os.Getenv("APP_PORT")
 	if appPort == "" {
@@ -181,36 +228,15 @@ func main() {
 
 	log.Printf("Connected to Redis.")
 
-	r := mux.NewRouter()
+	server := NewAgendaServer()
 
-	// Dapr subscription routes orders topic to this route
-	r.HandleFunc("/", newAgendaItemHandler).Methods("POST")
-	r.HandleFunc("/", getAllAgendaItemsHandler).Methods("GET")
-	r.HandleFunc("/highlights", getHighlightsHandler).Methods("GET")
-	r.HandleFunc("/{id}", getAgendaItemByIdHandler).Methods("GET")
-	r.HandleFunc("/day/{day}", getAgendaByDayHandler).Methods("GET")
-	// r.HandleFunc("/{id}", deleteAgendaItemHandler).Methods("DELETE")
-	// r.HandleFunc("/", deleteAllHandler).Methods("DELETE")
+	// Add Swagger 2.0
+	server.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:"+appPort+"/swagger/doc.json"),
+	))
 
-	// Add handlers for readiness and liveness endpoints
-	r.HandleFunc("/health/{endpoint:readiness|liveness}", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
-	})
-
-	r.HandleFunc("/service/info", func(w http.ResponseWriter, r *http.Request) {
-		var info ServiceInfo = ServiceInfo{
-			Name:         "AGENDA",
-			Version:      VERSION,
-			Source:       SOURCE,
-			PodId:        POD_ID,
-			PodNamespace: POD_NODENAME,
-		}
-		json.NewEncoder(w).Encode(info)
-	})
-
-	// Start the server; this is a blocking call
-	err := http.ListenAndServe(":"+appPort, r)
-	if err != http.ErrServerClosed {
+	err := http.ListenAndServe(":"+appPort, server)
+	if err != nil {
 		log.Panic(err)
 	}
 }
@@ -245,4 +271,44 @@ func getEnv(key, fallback string) string {
 		value = fallback
 	}
 	return value
+}
+
+// NewAgendaServer creates a new chi.Mux with all necessaries http.HandlerFunc handlers, to make the agenda-service
+// running.
+func NewAgendaServer() *chi.Mux {
+
+	r := chi.NewRouter()
+
+	// Dapr subscription routes orders topic to this route
+	r.Post("/", newAgendaItemHandler)
+	r.Get("/", getAllAgendaItemsHandler)
+	r.Get("/highlights", getHighlightsHandler)
+	r.Get("/{id}", getAgendaItemByIdHandler)
+	r.Get("/day/{day}", getAgendaByDayHandler)
+
+	// r.Delete("/{id}", deleteAgendaItemHandler)
+	// r.Delete("/", deleteAllHandler)
+
+	// Add health check
+	r.HandleFunc("/health/{endpoint:readiness|liveness}", healthCheck)
+
+	// Service info
+	r.HandleFunc("/service/info", serviceInfo)
+
+	return r
+}
+
+func serviceInfo(w http.ResponseWriter, r *http.Request) {
+	var info = ServiceInfo{
+		Name:         "AGENDA",
+		Version:      VERSION,
+		Source:       SOURCE,
+		PodId:        POD_ID,
+		PodNamespace: POD_NODENAME,
+	}
+	json.NewEncoder(w).Encode(info)
+}
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }

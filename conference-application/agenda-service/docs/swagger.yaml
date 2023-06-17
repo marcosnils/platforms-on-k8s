@@ -1,0 +1,88 @@
+basePath: /
+definitions:
+  main.AgendaItem:
+    properties:
+      author:
+        type: string
+      day:
+        type: string
+      id:
+        type: string
+      proposal:
+        $ref: '#/definitions/main.Proposal'
+      time:
+        type: string
+      title:
+        type: string
+    type: object
+  main.Proposal:
+    properties:
+      id:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: salaboy@salaboy.com
+    name: Mauricio Salatino @salaboy
+    url: https://www.salaboy.com
+  description: REST API to provide Agenda features.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Agenda Service API
+  version: 0.0.1
+paths:
+  /:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new agenda item
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.AgendaItem'
+      summary: Creates a new agenda item
+      tags:
+      - Agenda
+  /{ID}:
+    get:
+      consumes:
+      - application/json
+      description: Gets an AgendaItem by ID
+      parameters:
+      - description: AgendaItem ID
+        in: path
+        name: ID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.AgendaItem'
+      summary: Show Agenda Item
+      tags:
+      - Agenda
+  /highlights:
+    get:
+      consumes:
+      - application/json
+      description: Get all highlights
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.AgendaItem'
+            type: array
+      summary: Show highlights
+      tags:
+      - Highlight
+swagger: "2.0"
