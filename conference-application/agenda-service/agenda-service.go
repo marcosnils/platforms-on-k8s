@@ -134,6 +134,28 @@ func getAllAgendaItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func NewGetAllAgendaItemsHandler(redisClient *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
+		agendaItemsHashs, err := redisClient.HGetAll(ctx, KEY).Result()
+		if err != nil {
+			panic(err)
+		}
+		var agendaItems []AgendaItem
+
+		for _, ai := range agendaItemsHashs {
+			var agendaItem AgendaItem
+			err = json.Unmarshal([]byte(ai), &agendaItem)
+			if err != nil {
+				log.Printf("There was an error decoding the AgendaItem into the struct: %v", err)
+			}
+			agendaItems = append(agendaItems, agendaItem)
+		}
+		log.Printf("Agenda Items retrieved from Database: %d", len(agendaItems))
+		respondWithJSON(w, http.StatusOK, agendaItems)
+	}
+}
+
 // getAgendaItemByIdHandler gets an agenda item by ID.
 // @Summary Show Agenda Item
 // @Description Gets an AgendaItem by ID
@@ -170,6 +192,7 @@ func getAgendaItemByIdHandler(w http.ResponseWriter, r *http.Request) {
 // @Router / [post]
 // @Success 200 {object} AgendaItem
 func newAgendaItemHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Creating new AgendaItem")
 	ctx := context.Background()
 
 	var agendaItem AgendaItem
@@ -191,6 +214,33 @@ func newAgendaItemHandler(w http.ResponseWriter, r *http.Request) {
 
 	// @TODO avoid doing two marshals to json
 	respondWithJSON(w, http.StatusOK, agendaItem)
+}
+
+func NewCreateAgendaItemHandler(redisClient *redis.Client) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Creating new AgendaItem")
+		ctx := context.Background()
+
+		var agendaItem AgendaItem
+		err := json.NewDecoder(r.Body).Decode(&agendaItem)
+		if err != nil {
+			log.Printf("There was an error decoding the request body into the struct: %v", err)
+		}
+
+		// @TODO: write fail scenario (check for fail string in title return 500)
+
+		agendaItem.Id = uuid.New().String()
+
+		err = redisClient.HSetNX(ctx, KEY, agendaItem.Id, agendaItem).Err()
+		if err != nil {
+			panic(err)
+		}
+
+		log.Printf("Agenda Item Stored in Database: %s", agendaItem)
+
+		// @TODO avoid doing two marshals to json
+		respondWithJSON(w, http.StatusOK, agendaItem)
+	}
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
@@ -228,7 +278,7 @@ func main() {
 
 	log.Printf("Connected to Redis.")
 
-	server := NewAgendaServer()
+	server := NewAgendaServer(rdb)
 
 	// Add Swagger 2.0
 	server.Get("/swagger/*", httpSwagger.Handler(
@@ -275,13 +325,13 @@ func getEnv(key, fallback string) string {
 
 // NewAgendaServer creates a new chi.Mux with all necessaries http.HandlerFunc handlers, to make the agenda-service
 // running.
-func NewAgendaServer() *chi.Mux {
+func NewAgendaServer(redisClient *redis.Client) *chi.Mux {
 
 	r := chi.NewRouter()
 
 	// Dapr subscription routes orders topic to this route
-	r.Post("/", newAgendaItemHandler)
-	r.Get("/", getAllAgendaItemsHandler)
+	r.Post("/", NewCreateAgendaItemHandler(redisClient))
+	r.Get("/", NewGetAllAgendaItemsHandler(redisClient))
 	r.Get("/highlights", getHighlightsHandler)
 	r.Get("/{id}", getAgendaItemByIdHandler)
 	r.Get("/day/{day}", getAgendaByDayHandler)
